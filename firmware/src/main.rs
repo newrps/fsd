@@ -141,8 +141,6 @@ async fn main(spawner: Spawner) {
     let encoder_pin = ExtiInput::new(p.PA2, p.EXTI2, Pull::Up, Irqs);
 
     info!("spawning tasks...");
-    // 0.10: #[task] 매크로가 Result<SpawnToken, SpawnError> 반환. unwrap() 로 토큰만 추출.
-    // Spawner::spawn(token) 자체는 () 반환.
     spawner.spawn(heartbeat(led_hb).unwrap());
     info!("1 heartbeat spawned");
     spawner.spawn(safe_indicator(led_safe).unwrap());
@@ -163,7 +161,15 @@ async fn main(spawner: Spawner) {
     // 분배기 회로 결선되면 활성화. 일단 실행 차단.
     let _ = (p.ADC1, p.PC0);
     // spawner.spawn(battery_task(p.ADC1, p.PC0).unwrap());
-    info!("MAIN done, executor takes over");
+    info!("MAIN done, yielding...");
+    // main task 가 즉시 끝나면 executor 가 다른 task 들 poll 안 하는 상황 우회.
+    // main 도 task 라 await 하면 다른 task 들에 양보됨.
+    let mut i: u32 = 0;
+    loop {
+        Timer::after(Duration::from_millis(1000)).await;
+        info!("main alive {}", i);
+        i = i.wrapping_add(1);
+    }
 }
 
 // ----- 태스크 정의 ---------------------------------------------------------
