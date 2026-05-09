@@ -93,6 +93,9 @@ async fn main(spawner: Spawner) {
         config.rcc.apb3_pre = APBPrescaler::DIV2;
         config.rcc.apb4_pre = APBPrescaler::DIV2;
         config.rcc.voltage_scale = VoltageScale::Scale1;
+        // ADC1 은 기본으로 pll2_p 를 쓰는데 우리는 PLL2 미사용. PER(peripheral) 클럭으로 전환.
+        // PER 의 소스는 기본 HSI(64MHz) 라 ADC 동작에 충분 (≤80MHz 제약).
+        config.rcc.mux.adcsel = mux::Adcsel::PER;
     }
     let p = embassy_stm32::init(config);
     info!("fsd-firmware starting on STM32H753ZI");
