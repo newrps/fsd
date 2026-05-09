@@ -96,6 +96,20 @@ NUCLEO-H753ZI MB1364 의 **default SB 매트릭스가 USART 신호의 외부 헤
 
 상세 안내: [firmware.md — Jetson↔NUCLEO 시리얼 path](firmware.md)
 
+### EXTI 입력 task spawn 후 task polling 멈춤 (RC 수신기 미결선 시)
+> **증상**: `rc_capture_steering` / `rc_capture_throttle` (PA0/PA1) 또는 `encoder_task` (PA2) 를 spawn 한 펌웨어가 부팅 후 spawn 메시지 (`1 heartbeat spawned` 등) 까지만 RTT 출력하고 그 후 어떤 task 의 `STARTED` 출력도 안 남. heartbeat tick 도 안 찍히고 `main alive` 도 없음.
+
+**원인**: 외부 RC 수신기 / 엔코더 미결선 상태에서 `ExtiInput::new(p.PAx, p.EXTIx, Pull::Down/Up, Irqs)` 와 `bind_interrupts!{ EXTI0/1/2 => exti::InterruptHandler<...> }` 가 활성화되면, 입력 핀이 floating-like 상태에서 환경 노이즈로 EXTI IRQ 가 폭주한다. IRQ handler 가 wake 신호를 끝없이 보내 executor 가 다른 task 들을 poll 할 시간이 없어진다.
+
+**확인 방법** (2026-05-10 진단):
+- step5 (heartbeat + safe_indicator + uart_rx + pwm + telemetry, 5 task) → 정상
+- step6 (위 + EXTI 3개 추가) → spawn 직후 polling 멈춤
+- EXTI 3개만 다시 비활성화 → 즉시 회복
+
+**해결**:
+- RC 수신기 / 엔코더가 결선되어 PA0/PA1/PA2 에 안정 신호가 들어오기 전까지 EXTI task 들을 활성화하지 않는다 (`firmware/src/main.rs` 의 commented 블록 참고).
+- 결선 후에도 노이즈가 남으면: 외부 풀 저항 강화, hardware schmitt trigger / RC 필터 추가, 또는 EXTI 대신 timer input capture 로 전환.
+
 ### `cargo run --release` 종료 후 텔레메트리 끊김
 > **증상**: `cargo run --release` 가 timeout/Ctrl-C 로 종료되면 chip 이 halt 상태가 되어 시리얼 송출이 멈춤.
 

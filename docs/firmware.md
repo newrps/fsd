@@ -114,6 +114,19 @@ ST-Link USB 분리 후 외부 5V 인가해도 동일 동작 (펌웨어는 플래
 | `encoder_task` | rising edge 마다 | PA2 EXTI2 — atomic 카운터 ENCODER_TICKS 증가 |
 | `battery_task` | 100 ms | ADC1+PC0 → 16-bit raw → 4:1 분배기 보정 → mV → BATTERY_MV |
 
+## RC capture / encoder / battery task 활성화 조건
+
+`firmware/src/main.rs` 의 `rc_capture_steering` / `rc_capture_throttle` / `encoder_task` / `battery_task` 4개는 default 빌드에서 **비활성화**. main 의 commented 블록을 참고해 결선 후 활성화한다.
+
+| task | 비활성 이유 | 활성화 조건 |
+|---|---|---|
+| `rc_capture_steering` (PA0 EXTI0) | RC 수신기 미결선 시 floating noise → IRQ 폭주 → polling 정지 | RC 수신기 PWM 출력 결선 후 |
+| `rc_capture_throttle` (PA1 EXTI1) | 동상 | 동상 |
+| `encoder_task` (PA2 EXTI2) | 휠 엔코더 미결선 시 동일 noise 위험 | 엔코더 라인 결선 후 |
+| `battery_task` (ADC1 PC0) | 분배기 미결선 + ADC `blocking_read` 의 다른 task starvation 검토 필요 | 4:1 전압 분배기 결선 + 동작 검증 후 |
+
+활성화 시 `bind_interrupts!` 에 EXTI0/1/2 + `use embassy_stm32::interrupt::typelevel as irq_t` 도 같이 복원. 진단 기록은 [troubleshooting.md](troubleshooting.md).
+
 ## RC 입력 캡처
 
 - 핀 PA0/PA1 의 rising→falling 시간차를 `Instant::now()` 로 측정 (tick-hz=1 MHz, 1 µs 정밀도)
