@@ -2,6 +2,25 @@
 
 `firmware/` 디렉터리. Embassy 0.6 기반 `no_std` Rust.
 
+## 한 줄 요약
+
+NUCLEO-H753ZI 가 RC카의 모터/서보를 직접 제어하고, Jetson 과 시리얼 통신으로 명령 받고/상태 보고하는 실시간 컨트롤러.
+
+## 8가지 기능 한눈에
+
+| # | 기능 | 핀 | 비고 |
+|---|---|---|---|
+| 1 | PWM 출력 (조향 서보) | PA6 (TIM3 CH1, 50 Hz) | 1000–2000 µs 펄스 |
+| 2 | PWM 출력 (ESC) | PA7 (TIM3 CH2, 50 Hz) | 부팅 시 3초 arming |
+| 3 | UART 명령 수신 (Jetson → STM32) | PD9 RX (USART3) | COBS+postcard+CRC, 921600 8N1 |
+| 4 | UART 텔레메트리 (STM32 → Jetson) | PD8 TX (USART3) | 50 Hz 송신 |
+| 5 | RC 수신기 입력 (조향) | PA0 (EXTI0) | µs 정밀 펄스폭 |
+| 6 | RC 수신기 입력 (스로틀) | PA1 (EXTI1) | 동상 |
+| 7 | 휠 엔코더 카운터 | PA2 (EXTI2) | rising edge 마다 +1 |
+| 8 | 배터리 전압 ADC | PC0 (ADC1) | 4:1 분배기 가정 |
+
+추가 GPIO: PB0 (LD1 heartbeat), PE1 (LD2 safe-mode).
+
 ## 빌드
 
 ```bash
@@ -29,6 +48,28 @@ cargo run --release
 probe-rs download --chip STM32H753ZITx target/thumbv7em-none-eabihf/release/fsd-firmware
 probe-rs reset --chip STM32H753ZITx
 ```
+
+## 플래시 검증 (LED + RTT)
+
+플래시 성공 시 부팅 직후 RTT 출력:
+```
+[INFO ] fsd-firmware starting on STM32H753ZI
+[INFO ] ADC frequency set to 32000000 Hz
+[INFO ] PWM max_duty = ...
+[INFO ] ESC arming: 3000ms neutral pulse
+[INFO ] ESC armed, accepting commands
+```
+
+LED 진단표:
+| LED | 상태 | 의미 |
+|---|---|---|
+| LD1 (녹색, PB0) | **0.5초 토글 (1초 주기 깜빡)** | heartbeat — 펌웨어 살아있음 |
+| LD2 (PE1) | 부팅 후 3초 켜졌다 꺼짐 | ESC arming → 명령 수신 대기 |
+| LD2 | 3초 후에도 계속 켜짐 | safe-mode (명령 미수신 watchdog 또는 estop) |
+| LD2 | 꺼짐 | 명령 처리 중, 정상 동작 |
+| LD1 안 깜빡 | — | 펌웨어 부팅 실패 (RTT 로 확인) |
+
+ST-Link USB 분리 후 외부 5V 인가해도 동일 동작 (펌웨어는 플래시 메모리에 영구 저장).
 
 ## 동작 요약
 
@@ -87,9 +128,26 @@ DEFMT_LOG=debug cargo run --release
 
 `firmware/src/main.rs` 상단의 핀 매핑 코멘트 + 실제 코드에서 `p.PA6`, `p.PA7`, `p.PD8`, `p.PD9` 부분만 바꾸면 됨. 변경 시 `docs/hardware.md` 표도 같이 갱신.
 
+## RCC (클럭) 설정 메모
+
+```rust
+config.rcc.pll1 = Some(Pll {  // 240 MHz sysclk
+    source: HSI, prediv: DIV4, mul: MUL30, divp: DIV2, ...
+});
+config.rcc.sys = Sysclk::PLL1_P;          // 240 MHz
+config.rcc.mux.adcsel = mux::Adcsel::PER; // ADC 클럭을 PER(=HSI 64MHz)로
+```
+
+⚠️ **ADC mux 명시 필수**: embassy-stm32 0.6 의 ADC1 기본 클럭이 `pll2_p` 인데 우리는 PLL2 미사용. 그대로 두면 부팅 직후 패닉:
+```
+panicked: peripheral 'ADC1' is configured to use the 'pll2_p' clock, which is not running
+```
+→ `adcsel = PER` 로 우회 (HSI 64 MHz, ADC 동작 32 MHz, 80 MHz 스펙 만족).
+
 ## 장애 시
 
 - LED1 안 깜빡임: 클럭/전원 문제. 또는 `embassy_stm32::init` 실패 (가장 흔히 RCC 설정)
 - LED1 깜빡이지만 명령 무반응: UART 배선/baud 확인. 921600 8N1
 - PWM 출력만 이상: `pwm_task` 의 `max_duty` 로그 확인. TIM3 클럭 확인
+- 패닉 `pll2_p clock not running`: 위 ADC mux 메모 참고
 - 자세한 트러블슈팅: [troubleshooting.md](troubleshooting.md)

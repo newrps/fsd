@@ -41,9 +41,25 @@ LLD 가 기본이라 보통 안 나오지만, 특정 환경에서 발생. `firmw
 ### `probe-rs run` — `No probe found`
 > ST-LINK 가 안 잡힘.
 
-- USB 케이블 확인 (충전 전용 케이블 X)
+- USB 케이블 확인 (충전 전용 케이블 X) — Mini-USB B 는 충전 전용 비율 높음. 폰 데이터 케이블이나 SSD 케이블로 교체
+- 보드 LED 진단:
+  - **LD3(빨강 user) 깜빡 + LD5(노랑/빨강 5V) 켜짐** = 보드 정상, USB 데이터 라인만 문제 → 케이블 교체
+  - 둘 다 안 켜짐 = 전원 미인가 → JP1=`U5V`, JP5(IDD) 점퍼 확인
+- Windows: 장치관리자에서 `VID_0483&PID_374E`(ST-Link V3) 보이는지 확인. 없으면 케이블, 있는데 노란 느낌표면 ST-LINK 드라이버 설치 (st.com STSW-LINK009)
 - Linux: udev rule. probe-rs 문서의 `/etc/udev/rules.d/69-probe-rs.rules` 적용 + `sudo udevadm control --reload`
-- Windows: ST-LINK 드라이버 설치 (st.com)
+
+### 펌웨어 부팅 직후 패닉 — `peripheral 'ADC1' is configured to use the 'pll2_p' clock, which is not running`
+> **증상**: NUCLEO 에 플래시 후 RTT 첫 줄 출력 직후 panic_probe 가 hard fault 일으킴.
+
+embassy-stm32 0.6 의 ADC1 기본 클럭 mux 가 `pll2_p` 인데 RCC 설정에 PLL2 가 없으면 발생. 해결:
+```rust
+// firmware/src/main.rs 의 RCC 설정 블록 끝에 추가
+config.rcc.mux.adcsel = mux::Adcsel::PER;
+```
+PER(peripheral) 클럭 = 기본 HSI 64 MHz (이미 활성). ADC 동작 32 MHz, 80 MHz 스펙 내라 안전.
+RTT 에 `[INFO] ADC frequency set to 32000000 Hz` 가 보이면 정상.
+
+대안: PLL2 를 추가 설정해 `pll2_p` 활성화 (정밀 클럭 필요 시).
 
 ### `probe-rs run` — `target not halted` 또는 `Error: ARM error`
 > 칩이 응답 없음.

@@ -2,6 +2,14 @@
 
 날짜 역순. 새 변경은 위에 추가. 한 줄 = 한 항목.
 
+## 2026-05-09
+
+- **Jetson Orin Nano Super 8GB 환경 셋업 완료**: JetPack 6.2.2 (R36.5.0) NVMe 단독 부팅, CUDA 12.6 / cuDNN 9.3 / TensorRT 10.3 / OpenCV 4.8 / VPI 3.2 검증. 무선 SSH (`192.168.123.178`) + USB-C 직결 (`192.168.55.1`) 둘 다 사용 가능. nvpmodel 에 `25W` / `MAXN_SUPER` 모드 노출 — Super 펌웨어 확정. 호스트 PC: Windows 11 + WSL2 + usbipd-win + SDK Manager Windows 2.4.0. 함정 기록: Orin Nano Dev Kit 은 DisplayPort 전용 (HDMI 단자 없음). Recovery 점퍼는 부팅 트리거용 — 부팅 후 즉시 제거 안 하면 USB 통신 불안정. SDK Manager 는 내부적으로 자체 WSL distro (`Nvidia_SDKM_Ubuntu_22.04_JetPack_6.2.2`) 생성. Wi-Fi 인터페이스명은 `wlP1p1s0` (PCIe 명명). 셋업 가이드: `C:\Users\newrp\Documents\Jetson\STATUS_AND_NEXT_STEPS.md`
+- **GitHub 저장소 생성** (https://github.com/newrps/fsd): 89개 파일 초기 푸시. SSH 키 인증 (PC + Jetson 둘 다 등록). 일상 워크플로우 = PC 에서 코드 → push → Jetson `git pull` → `cargo build -p fsd-jetson`
+- **Jetson 측 빌드 검증** (`cargo build --release -p fsd-jetson`): default features 로 빌드 성공 (4.2 MB 바이너리). 4 모드 (`serve` / `record` / `drive` / `replay`) 동작. ⚠️ `--features onnx` 는 ort 2.0.0-rc.12 의 download-binaries TLS 이슈로 실패 — `tls-rustls` feature 추가 또는 시스템 ORT (`libonnxruntime.so`) + `ORT_DYLIB_PATH` 환경변수 사용 필요. JetPack 6.2.2 에는 `libonnxruntime.so` 미포함 (TensorRT 만 있음) — pip wheel 또는 NVIDIA 별도 배포 필요
+- **펌웨어 ADC 클럭 버그 수정** (`firmware/src/main.rs`): `config.rcc.mux.adcsel = mux::Adcsel::PER` 추가. 이전엔 ADC1 이 기본 `pll2_p` 클럭을 쓰는데 우리 RCC 설정에 PLL2 가 없어서 부팅 직후 패닉 (`peripheral 'ADC1' is configured to use the 'pll2_p' clock, which is not running`). PER 클럭 = HSI 64 MHz (이미 활성), ADC 동작 주파수 32 MHz (≤80 MHz 스펙 만족). NUCLEO-H753ZI 실측: 부팅 정상, RTT 로 `ADC frequency set to 32000000 Hz` 확인
+- **NUCLEO-H753ZI 펌웨어 첫 플래시 완료**: probe-rs 0.31.0 / cargo-flash / cargo-embed 윈도우 설치 (`cargo install probe-rs-tools --locked`). USB Mini-B 데이터 케이블 + CN1(ST-LINK) 포트로 SWD. 함정 기록: 충전 전용 USB 케이블이면 `probe-rs list` 가 `No probes found` — Windows 장치관리자에 ST-Link USB(`VID_0483&PID_374E`) 가 보이는지 먼저 확인. 보드 LED 진단: LD3(빨강 user LED) 깜빡 + LD5(노랑 5V power) 켜짐 = 보드 정상, ST-Link USB 데이터 라인만 문제
+
 ## 2026-05-08
 
 - **3D 출력 마운트/커버** (`hardware-3d/`): HSP 94118 차체에 직접 장착하는 풀세트.
