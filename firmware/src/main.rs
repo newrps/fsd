@@ -102,7 +102,12 @@ async fn main(spawner: Spawner) {
     let p = embassy_stm32::init(config);
     info!("fsd-firmware starting on STM32H753ZI");
 
-    let led_hb = Output::new(p.PB0, Level::Low, Speed::Low);
+    // 디버그: main() 살아있다는 증거로 LD1 켜기.
+    let mut led_hb = Output::new(p.PB0, Level::High, Speed::Low);
+    info!("LD1 set HIGH (sanity)");
+    // 잠깐 켜뒀다가 heartbeat task 가 받아서 토글 시작.
+    cortex_m::asm::delay(10_000_000); // ~50ms @ 240MHz
+    led_hb.set_low();
     let led_safe = Output::new(p.PE1, Level::Low, Speed::Low);
 
     // 0.6: PwmPin::new(pin, output_type) — 채널은 핀 타입에서 결정.
@@ -135,24 +140,44 @@ async fn main(spawner: Spawner) {
     let rc_thr_pin = ExtiInput::new(p.PA1, p.EXTI1, Pull::Down, Irqs);
     let encoder_pin = ExtiInput::new(p.PA2, p.EXTI2, Pull::Up, Irqs);
 
+    info!("spawning tasks...");
     // 0.10: #[task] 매크로가 Result<SpawnToken, SpawnError> 반환. unwrap() 로 토큰만 추출.
+    // Spawner::spawn(token) 자체는 () 반환.
     spawner.spawn(heartbeat(led_hb).unwrap());
+    info!("1 heartbeat spawned");
     spawner.spawn(safe_indicator(led_safe).unwrap());
+    info!("2 safe_indicator spawned");
     spawner.spawn(uart_rx_task(uart_rx).unwrap());
+    info!("3 uart_rx spawned");
     spawner.spawn(pwm_task(pwm).unwrap());
+    info!("4 pwm_task spawned");
     spawner.spawn(telemetry_task(uart_tx).unwrap());
+    info!("5 telemetry_task spawned");
     spawner.spawn(rc_capture_steering(rc_steer_pin).unwrap());
+    info!("6 rc_steering spawned");
     spawner.spawn(rc_capture_throttle(rc_thr_pin).unwrap());
+    info!("7 rc_throttle spawned");
     spawner.spawn(encoder_task(encoder_pin).unwrap());
-    spawner.spawn(battery_task(p.ADC1, p.PC0).unwrap());
+    info!("8 encoder spawned");
+    // TODO: battery_task 의 ADC blocking_read 가 다른 task 들 starvation 유발 의심.
+    // 분배기 회로 결선되면 활성화. 일단 실행 차단.
+    let _ = (p.ADC1, p.PC0);
+    // spawner.spawn(battery_task(p.ADC1, p.PC0).unwrap());
+    info!("MAIN done, executor takes over");
 }
 
 // ----- 태스크 정의 ---------------------------------------------------------
 
 #[embassy_executor::task]
 async fn heartbeat(mut led: Output<'static>) {
+    info!("heartbeat task: STARTED");
+    let mut tick: u32 = 0;
     loop {
         led.toggle();
+        if tick % 10 == 0 {
+            info!("heartbeat tick {}", tick);
+        }
+        tick = tick.wrapping_add(1);
         Timer::after(Duration::from_millis(500)).await;
     }
 }

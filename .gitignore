@@ -29,3 +29,9 @@ cad/build/
 # OS
 Thumbs.db
 .DS_Store
+
+# Datasheets (downloaded, large binary)
+docs/datasheets/
+
+# Vendor photos / scratch
+vender/

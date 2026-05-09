@@ -15,8 +15,8 @@ fsd-protocol = { path = "../protocol", default-features = false }
 
 # embassy 생태계는 호환 버전을 같이 핀 (2026 초 기준 stable). 버전을 바꿀 땐 ecosystem
 # 전체를 같이 옮겨야 native-links 충돌(embassy-time-queue)이 안 난다.
-embassy-stm32    = { version = "0.6", features = ["defmt", "stm32h753zi", "memory-x", "time-driver-tim2", "exti", "unstable-pac"] }
-embassy-executor = { version = "0.10", features = ["defmt", "platform-cortex-m", "executor-thread", "executor-interrupt", "embassy-time-driver"] }
+embassy-stm32    = { version = "0.6", features = ["defmt", "stm32h753zi", "memory-x", "time-driver-any", "exti", "unstable-pac"] }
+embassy-executor = { version = "0.10", features = ["defmt", "platform-cortex-m", "executor-thread", "embassy-time-driver"] }
 embassy-time     = { version = "0.5", features = ["defmt", "defmt-timestamp-uptime", "tick-hz-1_000_000"] }
 embassy-sync     = { version = "0.7" }
 embassy-futures  = { version = "0.1" }
