@@ -1,0 +1,145 @@
+# CHANGELOG
+
+날짜 역순. 새 변경은 위에 추가. 한 줄 = 한 항목.
+
+## 2026-05-08
+
+- **3D 출력 마운트/커버** (`hardware-3d/`): HSP 94118 차체에 직접 장착하는 풀세트.
+  OpenSCAD 매개변수 설계로 `params.scad` 한 곳에서 차체/Jetson/NUCLEO/카메라 치수 관리.
+  - `top_deck.scad`: 메인 데크 (body post 4점 마운트, Jetson/NUCLEO/마스트 마운팅 홀, 케이블 슬롯)
+  - `camera_mast.scad`: 스테레오 마스트 (baseline 80mm, ±15° 틸트 슬롯, IMX219 PCB 어댑터)
+  - `jetson_tray.scad`: Jetson 4 standoff (M3 너트 포켓)
+  - `stm32_clip.scad`: NUCLEO standoff + ST-LINK USB 스트레인 릴리프
+  - `cover_shell.scad`: 풀 커스텀 커버 (RC 바디 대체, 카메라 슬롯 + 환기 + USB 액세스)
+  - `assembly.scad`: 충돌 검사용 placeholder 조립도
+  - `build.{ps1,sh}`: openscad CLI → STL 5개 일괄 렌더
+  - hardware-3d/README.md: 부품표/슬라이싱 가이드/조립 순서/매개변수 변경 시나리오
+- 5건 묶음 사이클 (진행해줘):
+  - **drive_sim 헤드리스 모드** (`ml-py/drive_sim.py --auto`): cv2 GUI 없이 사인파 자동 입력으로 manifest 생성. CI/서버에서도 동작. `auto_inputs(t)` 사인파 steering + 정상 throttle. `--frames N` / `--out PATH`
+  - **sim → train → replay E2E 검증**: drive_sim --auto 로 200프레임 합성 → train (10 epoch) → ONNX export → replay. MAE_steering ~0.09, latency ~300µs. smoke.py 가 외부 합성에 의존하지 않고 sim 에서도 학습 가능함을 증명
+  - **Python pytest 단위 테스트** (`ml-py/tests/`): 24개 테스트 4개 모듈. test_synthetic (3) / test_dataset (5, hflip steering 부호 반전 포함) / test_models (7, ARCHS 파라메트라이즈 + 정규화 적용 검증) / test_drive_sim (9, bicycle model 동역학). conftest.py 가 sys.path 처리. 3.0초 만에 24/24 PASS
+  - **CI 잡 확장** (`.github/workflows/ci.yml`): `python-tests` 잡 추가 — pytest 가 smoke.py 와 별도로 실행. PR 마다 24개 단위 테스트 + 1개 E2E smoke 모두 통과해야 머지 가능
+  - **quickstart 스크립트** (`scripts/quickstart.{ps1,sh}`): 처음 클론한 사람용 1-명령 데모. venv 셋업 → pytest → smoke → compare_archs → notebook_demo. `--only-tests`/`--skip-compare`/`--skip-demo` 옵션. scripts/README.md 갱신
+- 4건 묶음 (전부 진행):
+  - **하드웨어 셋업 체크리스트** (`docs/hardware-setup-checklist.md`): Phase 0~10 step-by-step. 각 단계 명령 + 예상 결과 + 트러블슈팅 포인터. 안전 원칙 명시
+  - **시각화 데모** (`ml-py/notebook_demo.py`): synthetic→train→export 의 4 PNG 자동 생성 (sample_frame, loss_curves, predictions, sample_predictions). jupytext `# %%` 셀 호환. 한글 폰트 fallback chain
+  - **모델 아키텍처 비교** (`ml-py/models.py` + `compare_archs.py` + `--arch` 플래그):
+    - PilotNet (252k) + TinyPilotNet (230k) 두 가지 아키텍처
+    - train.py / export_onnx.py 모두 --arch 플래그 받음
+    - 비교 스크립트가 같은 synthetic 으로 학습→export→bench → 표 출력
+    - 실측: 200 frames/20 epoch 에서 tiny 가 PilotNet 보다 더 빠르고 정확 (작은 데이터에서 over-param 회피)
+  - **운전 시뮬** (`ml-py/drive_sim.py`): cv2 + bicycle 차량 모델. 사인파 도로 1인칭 뷰. 키보드(←→↑↓/wasd) 운전 + `s` 녹화 토글. 출력 manifest 는 실차 record 와 동일 포맷 → 학습 가능
+  - docs/ml-paths.md 갱신 (아키텍처 표, 시뮬 사용법), docs/README.md 에 체크리스트 링크
+- 5건 묶음 사이클 (전부 진행):
+  - **burn 학습 시 stats 자동 계산**: `DrivingDataset::compute_stats()` 1패스. manifest 옆에 `stats.json` 저장. ml-py 와 동일 정책. 중복 입력 정규화 제거
+  - **deployment 자동화**: `scripts/deploy.sh` (rsync + 원격 빌드 + 선택 systemd 재시작), `scripts/fsd-jetson.service` (systemd unit), `scripts/install_systemd.sh` (Jetson 위 설치 헬퍼). docs/deployment.md 갱신
+  - **encoder/battery 텔레메트리**: PA2 (EXTI2 전용 IRQ) 엔코더 카운터 + PC0 (ADC1) 배터리 100ms 주기 측정. AtomicI32/U32 로 lock-free 공유. Telemetry.encoder_ticks/battery_v 실값
+  - **CLI 정리**: `--input` 을 `InputKind` ValueEnum 으로 (typo 검출). 4 모드 명시 + version + long_about. record/replay 명령 도움말 다듬음
+  - **multi-camera fusion (Python)**: PilotNet(stereo=True) 6채널 입력. DrivingDataset(stereo) 가 cam0+cam1 concat. AugmentingDataset hflip 시 cam0↔cam1 swap. synthetic.py `--stereo` 가 cam1 을 parallax shift 로 생성. train.py/export_onnx.py/replay.py 모두 `--stereo` 지원. replay 는 ONNX 입력 채널 보고 자동 인식. stereo E2E 검증: 학습→export→replay 동작. **mono smoke.py 회귀 없음 (PASS, MAE 0.16)**
+  - 모든 변경에 대응하는 docs (ml-paths.md, hardware.md, firmware.md, deployment.md) 갱신
+- runtime obstacle 감지 통합 (스펙 3.2.2 의 "장애물 회피" 가 드디어 동작):
+  - `slam::ObstacleMonitor`: ratio 기반 throttle 변조 (slow_ratio→linear, stop_ratio→0). 4 단위 테스트
+  - `run_drive` 가 cam1 을 stereo task (spawn_blocking) 로 전송 → obstacle_ratio watch 갱신 → 매 추론마다 throttle 변조
+  - `drive --calib <stereo_calib.json>` CLI 옵션 추가
+  - `slam-opencv` feature 안 켜져 있으면 자동 no-op (현재 동작 유지). 켜져 있고 calib 제공 시 활성화
+  - jetson 테스트 6/6 통과 (ObstacleMonitor pass-through/stop/linear/negative 전 케이스 + 기존 calibration·obstacle_detection)
+  - docs/slam.md 통합 다이어그램·정책 표 갱신, docs/jetson.md drive 모드 설명 갱신
+- recovery driving augmentation:
+  - 학습 시 30% 확률로 가로 ±20 px 시프트 + 시프트당 0.004 의 steering 보정
+  - 차선 이탈 후 복귀 학습 데이터를 자동 생성 (실차에서 한 번 벗어나면 못 돌아오는 흔한 실패 회피)
+  - Python `AugmentingDataset` + Rust `augment_in_place` 양쪽 동일 정책
+  - smoke.py 여전히 PASS (MAE 0.108)
+- 추론 벤치마크 도구 (`ml-py/bench.py`):
+  - p50/p95/p99/max latency + throughput + 50 Hz 예산 대비 헤드룸
+  - --provider cpu/cuda/tensorrt 로 백엔드 비교
+  - 자체 검증: Windows CPU 에서 PilotNet mean 251 µs, p99 445 µs, 3974 fps (50Hz 대비 80배)
+- firmware 안전 로직을 protocol 의 순수 함수로 추출 (호스트 테스트 가능):
+  - `protocol::control` 모듈: `is_safe_mode`, `resolve_command`, `ESC_ARMING_*`, `CMD_WATCHDOG_MS`, `RC_WATCHDOG_MS` 상수
+  - 7개 새 테스트 (fresh/estop/stale/boundary/safe-neutral/clamp/passthrough). protocol 총 15/15 통과
+  - firmware 의 watchdog 평가, ESC arming 펄스/시간, RC watchdog 모두 protocol 의 상수·함수 사용 — 한 곳에서 정책 변경 가능
+- SLAM Rust 실제 구현 (`jetson/src/slam.rs::opencv_impl`):
+  - `OpenCvProcessor`: stereoRectify + initUndistortRectifyMap + StereoSGBM + reprojectImageTo3D 풀 파이프라인
+  - opencv crate 0.94 (calib3d/imgproc/imgcodecs features) 추가
+  - `--features slam-opencv` 로 활성화 (시스템 OpenCV 4.5+ 필요)
+  - Python 측 `ml-py/stereo_demo.py` 참조 구현 — 동일 알고리즘, 시각화 포함, OpenCV 4.x pip 만으로 구동
+  - docs/slam.md 갱신
+- 데이터 분포 시각화 도구 (`ml-py/plot_distribution.py`):
+  - 6 패널 PNG: steering/throttle 히스토그램, frame interval, 시계열 2개, steering↔throttle 산점도
+  - 자동 경고: steering mean 편향 (>0.1), 또는 std 너무 작음 (<0.1, 코너 부족)
+  - matplotlib dep 추가
+  - data-collection.md 사후 점검 섹션 갱신
+- CI 설정 (`.github/workflows/ci.yml`):
+  - rust-workspace: cargo test + check (default + gamepad/onnx/burn-inference 조합) + fmt
+  - firmware: thumbv7em-none-eabihf 타겟 cargo check + release build
+  - python-smoke: smoke.py 전체 파이프라인
+  - Linux runner 만 사용 (Windows ort 빌드 이슈 회피). Swatinem/rust-cache + pip 캐시
+  - docs/ci.md 가이드
+- 🎯 **smoke.py E2E 검증 성공** (PyTorch 2.11 + onnxruntime 1.25, Windows 11):
+  - 200 synthetic frames → 25 epoch 학습 → ONNX export → onnxruntime 추론
+  - MAE_steering 0.10 (threshold 0.4 대비 1/4), MAE_throttle 0.03, avg latency 290 µs
+  - 발견·수정: `onnxscript` dep 추가 (PyTorch 2.5+ default exporter 요구), `verbose=False` (Windows cp949 인코딩 충돌), 표시 문자 ASCII 화 (✓→PASS, µ→us), 기본 epoch 5→25
+  - 추가: `ml-py/replay.py` — Python onnxruntime 기반 replay (cargo build 의 ort Windows 이슈 회피, CI/PC 모두 동작)
+  - smoke.py 의 4단계가 cargo→python 으로 변경. cargo replay 는 Jetson 실배포 검증용으로 별도 사용
+- 공유 PWM 변환을 protocol crate 로 이동:
+  - `fsd_protocol::pwm` 모듈 (no_std 호환): `normalized_to_pulse_us`, `pulse_us_to_normalized`, `duty_for_pulse_us`
+  - 5개 단위 테스트 추가 (endpoints, clamp, roundtrip, out-of-band rejection, duty proportions). protocol 총 8/8 통과
+  - firmware 가 이를 사용하도록 정리. firmware/jetson 양쪽 동일 매핑 보장
+- E2E 회귀 검증 도구:
+  - `ml-py/synthetic.py` — 그라디언트 이미지 + 사인 곡선 steering 의 결정론적 synthetic recording 생성기
+  - `ml-py/smoke.py` — 1줄로 실 데이터 없이 train→ONNX→replay 사이클 + MAE/latency 임계 검증
+- 실차 첫 시동에 필수: firmware ESC arming 시퀀스 (부팅 시 3초간 1500µs 강제 + LED2 표시). pwm_task 시작부에 추가
+- jetson `replay` 모드 (오프라인 모델 검증): manifest 프레임을 모델에 통과시켜 예측 vs 실측 CSV 출력 + MAE/latency 요약. 카메라/STM32 의존성 없음. 모델 학습 후 sanity 체크 + 백엔드 성능 비교 + 회귀 검증 용도
+- docs/firmware.md ESC arming 시퀀스 명시, docs/jetson.md replay 모드 추가, docs/deployment.md 5.5단계로 사전 sanity 검사 단계 삽입
+- Visual SLAM 스캐폴드 (스펙 3.2.2 시작):
+  - jetson/src/slam.rs — `StereoCalibration`, `CameraIntrinsics`, `StereoExtrinsics`, `DepthMap`, `StereoProcessor` trait + StubProcessor
+  - `obstacle_ratio(depth, roi, max_distance_m)` 단순 장애물 감지 (테스트 포함)
+  - feature `slam-opencv` placeholder (실제 opencv 바인딩 추가 시 활성화)
+  - ml-py/calibrate.py — OpenCV 체커보드 기반 stereo 캘리브레이션 → stereo_calib.json (Rust 측과 동일 schema)
+  - docs/slam.md — 단계별 로드맵, 캘리브레이션 절차, 백엔드 비교, 통합 계획
+- 데이터셋 정규화 통계 (모델 내장 방식):
+  - `ml-py/compute_stats.py` — manifest 1패스로 채널별 mean/std 계산
+  - PilotNet 에 정규화 layer 내장: PyTorch 는 `register_buffer`, burn 은 `Param<Tensor>` 사용
+  - ONNX export 시 정규화 자동 포함 → jetson 추론 코드 무변경
+  - train.py 가 stats.json 없으면 자동 계산 + 저장 (manifest 디렉터리에)
+  - burn 측: `PilotNetConfig::stats: InputStats` 추가, default 값은 PyTorch 기본값과 동일
+- ✅ **firmware embassy 0.6 마이그레이션 완료** (cargo check + cargo build --release 모두 통과):
+  - SimplePwm: ch1()/ch2() accessor + set_duty_cycle(u32). PwmPin::new(pin, OutputType) 단일 생성자
+  - BufferedUart::new 인자 순서: peri, rx, tx, tx_buf, rx_buf, irq, cfg (irq 가 buffer 뒤로)
+  - Spawner::spawn 은 () 반환, #[task] 매크로는 Result<SpawnToken,_> 반환 → `task.unwrap()` 패턴
+  - ExtiInput: mode 제네릭(`<Async>`) + 4번째 인자로 IRQ binding 추가
+  - BufferedUartRx::read 는 private inherent 가 trait 을 shadow → `embedded_io_async::Read::read(&mut rx, ..)` UFCS
+  - embedded-io-async 0.7 (embassy-stm32 0.6 과 동일 버전) 직접 dep
+  - RC 입력 핀 PB6/PB7 → PA0/PA1 (EXTI 0/1, 전용 NVIC IRQ — 공유 EXTI9_5 binding 회피)
+  - hardware.md / firmware.md / troubleshooting.md 동시 갱신 (마이그레이션 매핑 표)
+- ort 빌드 이슈: rc.12 의 download-binaries build script 가 ureq 3.x 와 비호환 → Windows 에서 `cargo build --features onnx` 실패. troubleshooting.md 에 워크어라운드 (WSL/Linux 또는 ORT_LIB_PATH 수동) 명시
+- 데이터 augmentation 추가 (train 시에만, val 원본):
+  - 좌/우 hflip + steering 부호 반전 50%, 밝기 ×[0.8,1.2], 대비 ×[0.8,1.2] (mean 기준)
+  - Rust: `ml/src/data.rs` `DrivingBatcher::train()`/`val()` 분리, `augment_in_place` + `hflip_chw` 추가
+  - Python: `ml-py/dataset.py` `AugmentingDataset` 래퍼, train.py 에서 train subset 만 wrap
+  - 정책은 양 파일 1:1 동일 — 변경 시 동시 갱신
+- 첫 컴파일 검증 사이클 (rustc 1.95):
+  - ✅ protocol: cargo test 3/3 통과 (roundtrip + bad CRC rejection)
+  - ✅ ml (burn 0.14): default(ndarray) feature 컴파일 통과. 수정 — burn `vision` feature 제거(0.14 버그), train.rs 에 Optimizer/AutodiffModule/ElementConversion/Dataset 트레이트 임포트 추가, PartialDataset::new(start,end) 로 분할
+  - ✅ jetson: default + `--features onnx`(ort 2.0-rc.12) + `--features gamepad` + `--features "gamepad,onnx,burn-inference"` 모두 컴파일 통과. 수정 — ort 2.0-rc.12 API drift(Outlet 필드→메서드, Tensor::from_array 시그니처, ort::Error<R> generic 의 anyhow 변환), tokio::select! 매크로 arm 분리(match 블록 wrap)
+  - ⏸️ firmware: embassy-stm32 0.2→0.6 API 마이그레이션 필요(25 errors). main.rs 상단에 마이그레이션 가이드 추가, troubleshooting.md 에 0.2→0.6 매핑 표 작성. 실제 STM32 플래시 직전에 진행 권장
+  - 워크스페이스: profile 정의를 루트로 이동, crc workspace dep 의 default-features 명시, ml/jetson 의 [profile.release] 제거
+- 입력 소스 두 가지 추가 (RC 수신기 + USB 게임패드):
+  - protocol: Telemetry 에 rc_steering / rc_throttle / rc_present 필드 추가 (호환 깨짐 — 0.1 단계라 OK)
+  - firmware: PB6/PB7 ExtiInput 으로 RC PWM 캡처 (1 µs 정밀도, tick-hz 1 MHz)
+  - jetson: input.rs 에 InputSource trait + GamepadSource(gilrs) + RcSource. record 모드에 --input rc|gamepad|auto
+  - jetson Cargo feature: gamepad
+  - docs: hardware/firmware/jetson/data-collection/setup 갱신
+- docs/ 초기 셋 작성 (README/setup/hardware/firmware/jetson/data-collection/ml-paths/deployment/troubleshooting/CHANGELOG)
+- 루트 README 의 docs 링크 보강
+- jetson 에 `Predictor` trait + `OrtPredictor`/`BurnPredictor` 추가 (모델 확장자로 자동 선택)
+- jetson Cargo features: `onnx`/`onnx-cuda`/`onnx-tensorrt`/`burn-inference`
+- ml/ 에 `fsd-export-onnx` 바이너리 추가 (현재 스텁 — burn 0.14 ONNX export API 안정화 대기)
+- ml-py/ 신규 — PyTorch PilotNet + 학습 + ONNX export (경로 A)
+- jetson::control::run_drive 카메라 → 추론 → STM32 명령 송신 wiring (camera feature 시)
+- ml/ 의 backend 타입을 `fsd_ml::DefaultBackend` 로 re-export (jetson 에서 직접 burn 의존 없이 사용)
+- 초기 워크스페이스 스캐폴드: protocol/ + firmware/ + jetson/ + ml/ + cad/
+  - protocol/ : postcard + COBS + CRC16-IBM 프레임 코덱 (no_std + std), 라운드트립 테스트 포함
+  - firmware/ : Embassy 0.6 STM32H753ZI, USART3@921600, TIM3 PWM 50Hz, 200ms watchdog
+  - jetson/   : tokio + tokio-serial + (선택) GStreamer 듀얼 IMX219 + 데이터 로거
+  - ml/       : burn 0.14 PilotNet 회귀 모델 + 학습/추론 CLI
+  - cad/      : CadQuery 카메라/Jetson/NUCLEO 마운트 파라메트릭 스크립트

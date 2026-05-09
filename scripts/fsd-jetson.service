@@ -1,0 +1,32 @@
+[Unit]
+Description=fsd autonomous RC car (Jetson side)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=jetson
+Group=dialout
+WorkingDirectory=/home/jetson/fsd
+# Jetson 의 시스템 ONNX Runtime 사용 시 필요
+Environment=ORT_DYLIB_PATH=/usr/lib/aarch64-linux-gnu/libonnxruntime.so
+Environment=RUST_LOG=info
+ExecStart=/home/jetson/fsd/target/release/fsd-jetson \
+    --serial /dev/ttyTHS1 \
+    --baud 921600 \
+    drive \
+    --model /home/jetson/fsd/model.onnx \
+    --calib /home/jetson/fsd/stereo_calib.json
+# 모델/시리얼 미준비로 즉시 fail 시 재시작 폭주 방지.
+Restart=on-failure
+RestartSec=5
+# 정상 종료 시 차량을 NEUTRAL 로 (펌웨어 watchdog 가 200ms 안에 처리).
+KillSignal=SIGINT
+TimeoutStopSec=2
+
+# 안전 격리.
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

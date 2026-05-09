@@ -1,0 +1,52 @@
+[package]
+name = "fsd-ml"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Behavioral cloning training & inference (Rust + burn)."
+
+[lib]
+name = "fsd_ml"
+path = "src/lib.rs"
+
+[[bin]]
+name = "fsd-train"
+path = "src/bin/train.rs"
+
+[[bin]]
+name = "fsd-infer"
+path = "src/bin/infer.rs"
+
+[[bin]]
+name = "fsd-export-onnx"
+path = "src/bin/export_onnx.rs"
+
+[features]
+# 백엔드 선택. 기본은 CPU(ndarray) — 가볍고 의존성 작음.
+# tch-cpu / tch-cuda 는 같은 burn/tch feature 를 쓰지만 코드에서 device 만 다르게 선택.
+# (burn 0.14 의 cuda 는 별도 feature 가 없고 libtorch 가 CUDA 를 핸들링함.)
+default = ["ndarray"]
+ndarray = ["burn/ndarray"]
+tch-cpu = ["burn/tch"]
+tch-cuda = ["burn/tch"]
+
+[dependencies]
+# burn 의 vision feature 는 0.14.0 에 버그(image dep 누락)가 있고, 본 프로젝트는 image crate 를 직접 쓰므로 제외.
+burn = { version = "0.14", default-features = false, features = ["std", "train"] }
+
+image = "0.25"
+serde = { workspace = true, features = ["std", "derive"] }
+serde_json = "1.0"
+clap = { version = "4.5", features = ["derive"] }
+anyhow = "1.0"
+rand = "0.8"
+indicatif = "0.17"
+chrono = { version = "0.4", features = ["serde"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+# export_onnx 바이너리에서만 사용 (현재 스텁이므로 실제 burn-onnx 의존성 추가는 보류).
+# burn 버전 안정화 후 burn-import / burn-export 추가.
+
+# [profile.release] 는 워크스페이스 루트(Cargo.toml)에서만 의미가 있어 여기선 제거.

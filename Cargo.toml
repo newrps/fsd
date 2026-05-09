@@ -1,0 +1,29 @@
+[workspace]
+resolver = "2"
+members = [
+    "protocol",
+    "jetson",
+    "ml",
+]
+# firmware는 호스트와 타겟 트리플이 다르므로 워크스페이스에서 제외하고
+# 별도 빌드한다. firmware/.cargo/config.toml의 target = "thumbv7em-none-eabihf" 참고.
+exclude = ["firmware"]
+
+# 워크스페이스 단위 release profile.
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+authors = ["fsd team"]
+
+[workspace.dependencies]
+# 공통 의존성 — protocol crate는 no_std 호환이어야 하므로 default-features = false
+serde = { version = "1.0", default-features = false, features = ["derive"] }
+postcard = { version = "1.1", default-features = false }
+heapless = "0.8"
+crc = { version = "3.2", default-features = false }

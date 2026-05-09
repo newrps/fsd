@@ -1,0 +1,5 @@
+# Jetson(workspace) + 호스트 도구는 stable 사용.
+# 펌웨어(firmware/)는 자체 .cargo/config.toml 와 toolchain 으로 thumbv7em-none-eabihf 타겟을 사용한다.
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]

@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # -----------------------------------------------------------------
+  # Rust: workspace test + check (jetson + ml + protocol)
+  # -----------------------------------------------------------------
+  rust-workspace:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+      - name: Install system deps (gilrs udev)
+        run: sudo apt-get update && sudo apt-get install -y libudev-dev
+      - name: cargo test workspace
+        run: cargo test --workspace
+      - name: cargo check default
+        run: cargo check --workspace
+      - name: cargo check jetson - gamepad
+        run: cargo check -p fsd-jetson --features gamepad
+      - name: cargo check jetson - onnx
+        # Linux 에서는 ort download-binaries 가 정상 동작 (Windows ureq 이슈 없음).
+        run: cargo check -p fsd-jetson --features onnx
+      - name: cargo check jetson - all (no camera)
+        run: cargo check -p fsd-jetson --features "gamepad,onnx,burn-inference"
+      - name: cargo fmt
+        run: cargo fmt --all -- --check
+      - name: cargo clippy (workspace, no fail)
+        # 경고는 잡아내되 실패시키진 않음 — embassy/burn 의 잠재 warning 다수.
+        run: cargo clippy --workspace -- -A warnings
+        continue-on-error: true
+
+  # -----------------------------------------------------------------
+  # Firmware: thumbv7em-none-eabihf target check
+  # -----------------------------------------------------------------
+  firmware:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust + thumbv7em
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: thumbv7em-none-eabihf
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "firmware -> target"
+      - name: cargo check firmware
+        working-directory: firmware
+        run: cargo check
+      - name: cargo build --release firmware
+        working-directory: firmware
+        run: cargo build --release
+
+  # -----------------------------------------------------------------
+  # Python ML: pytest unit tests (synthetic, dataset, models, drive_sim)
+  # -----------------------------------------------------------------
+  python-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: ml-py/requirements.txt
+      - name: Install Python deps
+        working-directory: ml-py
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: pytest
+        working-directory: ml-py
+        env:
+          PYTHONIOENCODING: utf-8
+        run: python -m pytest tests/ -v
+
+  # -----------------------------------------------------------------
+  # Python ML: smoke.py (synthetic → train → ONNX → replay)
+  # -----------------------------------------------------------------
+  python-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: ml-py/requirements.txt
+      - name: Install Python deps
+        working-directory: ml-py
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run smoke test (skip cargo step)
+        working-directory: ml-py
+        env:
+          PYTHONIOENCODING: utf-8
+        # smoke.py 는 4단계가 ml-py/replay.py (Python onnxruntime). cargo 무관.
+        run: python smoke.py

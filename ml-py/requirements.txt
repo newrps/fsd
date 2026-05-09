@@ -1,0 +1,12 @@
+# PC 환경. Jetson 은 NVIDIA 제공 wheel 을 별도 설치할 것.
+torch>=2.1
+torchvision>=0.16
+pillow>=10.0
+tqdm>=4.65
+onnx>=1.15
+onnxscript>=0.1   # PyTorch 2.5+ 의 새 ONNX export 기본 경로가 요구
+onnxruntime>=1.18 # Python 기반 추론 검증 (smoke.py / replay.py)
+numpy>=1.24
+matplotlib>=3.7  # 데이터 분포 시각화 (plot_distribution.py)
+opencv-python>=4.8  # stereo 캘리브레이션·깊이 계산 (calibrate.py, stereo_demo.py)
+pytest>=7.0  # 단위 테스트 (tests/)

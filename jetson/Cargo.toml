@@ -1,0 +1,80 @@
+[package]
+name = "fsd-jetson"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Jetson Orin Nano main application: serial bridge, dual camera capture, data logger, autonomous inference."
+
+[[bin]]
+name = "fsd-jetson"
+path = "src/main.rs"
+
+[dependencies]
+fsd-protocol = { path = "../protocol", features = ["std"] }
+# burn-inference feature 가 켜지면 fsd-ml 을 가져온다(ndarray 백엔드, 가벼움).
+fsd-ml = { path = "../ml", default-features = false, features = ["ndarray"], optional = true }
+
+# ONNX Runtime — onnx feature 시 활성화.
+# Jetson 에서는 ORT_DYLIB_PATH 환경변수로 시스템 ORT 를 가리키도록 설정 가능.
+# ort 2.0.0-rc.12.
+# 알려진 이슈: Windows 에서 `cargo build --release --features onnx` 시 ort-sys 의 build script
+# 가 ureq 3.x 의 TlsConfig API 와 호환되지 않아 실패할 수 있다. cargo check 는 통과.
+# 권장 해결책 (Linux/Jetson): 그대로 download-binaries 사용. (Windows 는 docs/troubleshooting.md 참고)
+ort = { version = "=2.0.0-rc.12", optional = true, default-features = false, features = ["std", "download-binaries"] }
+
+tokio = { version = "1.41", features = ["macros", "rt-multi-thread", "sync", "time", "io-util", "signal", "fs"] }
+tokio-serial = "5.4"
+tokio-util = { version = "0.7", features = ["codec"] }
+bytes = "1.7"
+futures-util = "0.3"
+
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+clap = { version = "4.5", features = ["derive"] }
+anyhow = "1.0"
+thiserror = "1.0"
+
+# 카메라 캡처 — GStreamer (Jetson nvarguscamerasrc 활용)
+# Jetson 외 호스트에서 빌드/실험할 수 있도록 feature 로 분리한다.
+gstreamer = { version = "0.23", optional = true }
+gstreamer-app = { version = "0.23", optional = true }
+gstreamer-video = { version = "0.23", optional = true }
+
+# 게임패드 입력 (XInput / SDL2 / evdev). Linux 에서는 libudev-dev 필요.
+gilrs = { version = "0.10", optional = true }
+
+# OpenCV (Visual SLAM). 시스템 OpenCV 가 있어야 빌드 가능 — 아니면 slam-opencv feature 끄기.
+opencv = { version = "0.94", optional = true, features = ["calib3d", "imgproc", "imgcodecs"] }
+
+image = "0.25"
+chrono = { version = "0.4", features = ["serde"] }
+serde = { workspace = true, features = ["std"] }
+serde_json = "1.0"
+
+[features]
+default = []
+# Jetson 에서 빌드할 때만 켠다. 호스트 PC에서는 끄고 시리얼/로거만 테스트.
+camera = ["dep:gstreamer", "dep:gstreamer-app", "dep:gstreamer-video"]
+
+# 입력 소스
+#   gamepad : USB 게임패드 (gilrs)
+#   (rc 입력은 펌웨어에서 텔레메트리로 들어오므로 feature 불필요)
+gamepad = ["dep:gilrs"]
+
+# 추론 백엔드 — 빌드 타임에 어떤 백엔드(들) 를 포함할지 선택.
+#   onnx           : ort 기반. .onnx 모델 사용. CUDA/TensorRT EP 추가 활성화는 feature 로.
+#   onnx-cuda      : onnx + CUDA Execution Provider
+#   onnx-tensorrt  : onnx + TensorRT Execution Provider (Jetson 권장)
+#   burn-inference : fsd-ml 의 burn 모델 직접 호출 (.mpk)
+onnx           = ["dep:ort"]
+onnx-cuda      = ["onnx", "ort/cuda"]
+onnx-tensorrt  = ["onnx", "ort/tensorrt"]
+burn-inference = ["dep:fsd-ml"]
+
+# Visual SLAM — opencv 바인딩 사용. 시스템 OpenCV 4.5+ 필요.
+# Jetson: JetPack 의 OpenCV (apt install libopencv-dev). Linux PC: 동상. Windows: vcpkg.
+slam-opencv    = ["dep:opencv"]
+
+# [profile.release] 는 워크스페이스 루트에서만. 여기선 제거.
