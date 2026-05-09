@@ -10,8 +10,10 @@
 //! 5. RC 수신기 PWM 입력(PB6/PB7)을 µs 정밀도로 캡처해 텔레메트리에 포함
 //!
 //! 핀 매핑 (NUCLEO-H753ZI 기준):
-//! - USART3 TX: PD8   (ST-LINK VCP TX) — 실차에선 PB10 권장
-//! - USART3 RX: PD9   (ST-LINK VCP RX) — 실차에선 PB11
+//! - USART3 TX: PB10  (Zio CN10 D36, 외부 핀헤더 → Jetson J12 pin 10 UART_RX)
+//! - USART3 RX: PB11  (Zio CN10 D35, 외부 핀헤더 → Jetson J12 pin 8  UART_TX)
+//!   참고: PD8/PD9 는 ST-LINK VCP 전용이지만 NUCLEO-H753ZI MB1364 의 morpho 헤더가
+//!   기본 미솔더링이라 외부 접근 불가 → PB10/PB11 (Zio 확장 핀) 사용.
 //! - 서보 PWM:  PA6  (TIM3 CH1, 50 Hz, 1000–2000 µs)
 //! - ESC PWM:   PA7  (TIM3 CH2, 50 Hz)
 //! - RC 조향 in: PA0 (EXTI0, 전용 IRQ — 공유 IRQ EXTI9_5 회피)
@@ -123,7 +125,8 @@ async fn main(spawner: Spawner) {
     let tx_buf = TX_BUF.init([0u8; 256]);
     let rx_buf = RX_BUF.init([0u8; 512]);
     // 0.6: BufferedUart::new(peri, rx, tx, tx_buf, rx_buf, irq, cfg) — irq 가 buffer 뒤로.
-    let uart = BufferedUart::new(p.USART3, p.PD9, p.PD8, tx_buf, rx_buf, Irqs, uart_cfg)
+    // PB10 (TX) / PB11 (RX) — Zio CN10 핀헤더로 외부 접근 가능 (PD8/PD9 morpho 미솔더링 회피).
+    let uart = BufferedUart::new(p.USART3, p.PB11, p.PB10, tx_buf, rx_buf, Irqs, uart_cfg)
         .expect("USART3 init");
     let (uart_tx, uart_rx) = uart.split();
 
