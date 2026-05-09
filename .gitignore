@@ -35,3 +35,4 @@ docs/datasheets/
 
 # Vendor photos / scratch
 vender/
+*.bak

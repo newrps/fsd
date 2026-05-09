@@ -2,6 +2,12 @@
 
 날짜 역순. 새 변경은 위에 추가. 한 줄 = 한 항목.
 
+## 2026-05-10
+
+- **Jetson↔NUCLEO 시리얼 통신 검증 완료**: USART3 PD8/PD9 → ST-LINK USB-VCP → Jetson `/dev/ttyACM0` 양방향 통신 OK. `fsd-jetson serve --serial /dev/ttyACM0 --baud 115200` 에서 50Hz 텔레메트리 수신 + 100Hz cmd 송신 (last_applied_seq 증가 확인). 보드 ESC arming 정상 (3초 후 safe_mode false). 점퍼와이어 직결 시도는 default SB 라우팅 + 핀 식별 어려움으로 실패 — ST-LINK VCP 가 NUCLEO-H753ZI MB1364 의 사실상 default 통신 path 라는 결론. 자세한 내용 [firmware.md](firmware.md), 함정 기록 [troubleshooting.md](troubleshooting.md)
+- **펌웨어 step5 통신 검증용 simplified 형태로 임시 변경** (`firmware/src/main.rs`): heartbeat + uart_rx + pwm + telemetry + safe_indicator 5 task 만 spawn. EXTI(RC 캡처×2/엔코더) + ADC(배터리) 는 임시 비활성화 — 통신 검증 후 `main.rs.bak` 기반으로 다시 활성화 필요. baud 115200 (이전 921600 에서 다운). USART3 핀 : PD8/PD9 (PB10/PB11 점퍼와이어 시도 후 ST-LINK VCP 로 회귀)
+- **embassy 의존성 features 정합화** (`firmware/Cargo.toml`): `embassy-stm32` features 에 `time-driver-any` (이전 `time-driver-tim2`) + `executor-interrupt` 복원, `embassy-sync` 0.7→0.8 (embassy-stm32 0.6 이 0.8 요구). 이전 task polling 미동작 이슈는 sync 버전 정합 후 해결 — task #20 BUG 종결
+
 ## 2026-05-09
 
 - **Jetson Orin Nano Super 8GB 환경 셋업 완료**: JetPack 6.2.2 (R36.5.0) NVMe 단독 부팅, CUDA 12.6 / cuDNN 9.3 / TensorRT 10.3 / OpenCV 4.8 / VPI 3.2 검증. 무선 SSH (`192.168.123.178`) + USB-C 직결 (`192.168.55.1`) 둘 다 사용 가능. nvpmodel 에 `25W` / `MAXN_SUPER` 모드 노출 — Super 펌웨어 확정. 호스트 PC: Windows 11 + WSL2 + usbipd-win + SDK Manager Windows 2.4.0. 함정 기록: Orin Nano Dev Kit 은 DisplayPort 전용 (HDMI 단자 없음). Recovery 점퍼는 부팅 트리거용 — 부팅 후 즉시 제거 안 하면 USB 통신 불안정. SDK Manager 는 내부적으로 자체 WSL distro (`Nvidia_SDKM_Ubuntu_22.04_JetPack_6.2.2`) 생성. Wi-Fi 인터페이스명은 `wlP1p1s0` (PCIe 명명). 셋업 가이드: `C:\Users\newrp\Documents\Jetson\STATUS_AND_NEXT_STEPS.md`
