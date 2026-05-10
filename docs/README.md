@@ -17,6 +17,7 @@
 
 ## 참고
 
+- [resume-after-parts.md](resume-after-parts.md) — 부품 도착 후 재개 가이드 (단계별 결선 + 명령 + 예상 결과)
 - [troubleshooting.md](troubleshooting.md) — 자주 마주치는 문제
 - [ci.md](ci.md) — GitHub Actions CI 구성
 - [CHANGELOG.md](CHANGELOG.md) — 변경 이력
